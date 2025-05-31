@@ -1,5 +1,7 @@
 extern crate gl;
-use crate::shaders::shader::Shader;
+
+use super::super::shaders::shader::Shader;
+
 use nalgebra_glm as glm;
 use nalgebra_glm::{identity, translate, Vec3};
 

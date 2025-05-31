@@ -6,7 +6,7 @@ const WIDTH: u32 = 480;
 const HEIGHT: u32 = 320;
 const TITLE: &str = "Crow Engine";
 
-pub fn setup() -> (
+pub fn create_window() -> (
     glfw::Glfw,
     glfw::PWindow,
     glfw::GlfwReceiver<(f64, glfw::WindowEvent)>,

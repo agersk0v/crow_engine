@@ -1,38 +1,98 @@
 extern crate gl;
 extern crate glfw;
+use glfw::Context;
+
 use nalgebra_glm as glm;
 
 extern crate image;
 
-use image::GenericImageView;
-use std::path::Path;
+mod window;
+use window::create_window::create_window;
 
-use glfw::Context;
-
-mod setup;
-use setup::setup::setup;
-
-mod shaders;
-use shaders::{
+mod crowengine;
+use crate::crowengine::shaders::{
     fragment_shader::FRAGMENT_SHADER_SOURCE, shader::Shader, vertex_shader::VERTEX_SHADER_SOURCE,
 };
 
-mod meshes;
-use meshes::mesh::Mesh;
+use crate::crowengine::loaders::load_texture::load_texture;
+use crate::crowengine::meshes::mesh::Mesh;
+
+use std::cell::RefCell;
+use std::rc::Rc;
+
+pub struct Entity {
+    pub name: String,
+    pub mesh: Mesh,
+    pub position: glm::Vec3,
+    pub rotation: glm::Vec3,
+    pub color: glm::Vec3,
+}
+
+pub struct Entities {
+    pub list: Vec<Entity>,
+}
+
+impl Entities {
+    pub fn new() -> Self {
+        Entities { list: vec![] }
+    }
+
+    pub fn render(&self, shader: &Shader) {
+        for entity in &self.list {
+            entity
+                .mesh
+                .draw(&shader, &entity.position, &entity.rotation, &entity.color);
+        }
+    }
+
+    pub fn add(&mut self, entity: Entity) {
+        self.list.push(entity);
+    }
+}
+
+pub struct Commands {
+    pub entities: Rc<RefCell<Entities>>,
+}
+
+impl Commands {
+    pub fn new(entities: Rc<RefCell<Entities>>) -> Self {
+        Commands { entities }
+    }
+
+    pub fn spawn(
+        &self,
+        mesh: Mesh,
+        name: &str,
+        position: glm::Vec3,
+        rotation: glm::Vec3,
+        color: glm::Vec3,
+    ) {
+        let entity = Entity {
+            name: name.to_string(),
+            mesh,
+            position,
+            rotation,
+            color,
+        };
+
+        self.entities.borrow_mut().add(entity);
+    }
+}
 
 fn main() {
-    let (mut glfw, mut window, events) = setup();
+    let (mut glfw, mut window, events) = create_window();
 
     let (width, height) = window.get_framebuffer_size();
+
     let aspect = width as f32 / height as f32;
 
     let fov = glm::radians(&glm::vec1(45.0)).x;
     let projection = glm::perspective(aspect, fov, 0.1, 100.0);
 
+    // camera
     let eye = glm::vec3(0.0, 0.0, 3.0); // camera position
     let center = glm::vec3(0.0, 0.0, 0.0); // look at origin
     let up = glm::vec3(0.0, 1.0, 0.0); // camera up
-
     let view = glm::look_at(&eye, &center, &up);
 
     let texture = load_texture("src/assets/brick_texture.jpg");
@@ -75,7 +135,28 @@ fn main() {
         20, 21, 22, 22, 23, 20,
     ];
 
+    let entities = Rc::new(RefCell::new(Entities::new()));
+    let commands = Commands::new(Rc::clone(&entities));
+
     let cube = Mesh::new(&vertices, &indices, texture);
+
+    commands.spawn(
+        cube,
+        "Cube",
+        xyz(-0.5, 0.0, 1.0),
+        rotate(20.0, 40.0, 40.0),
+        rgb(0.5, 0.0, 0.5),
+    );
+
+    let cube = Mesh::new(&vertices, &indices, texture);
+
+    commands.spawn(
+        cube,
+        "Cube",
+        xyz(0.5, 0.0, 1.0),
+        rotate(20.0, 40.0, 40.0),
+        rgb(0.5, 0.0, 0.5),
+    );
 
     while !window.should_close() {
         glfw.poll_events();
@@ -86,17 +167,12 @@ fn main() {
 
         unsafe {
             gl::ClearColor(0.2, 0.3, 0.3, 1.0);
+
             gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
         }
 
-        let time = glfw.get_time() as f32;
+        entities.borrow().render(&shader);
 
-        cube.draw(
-            &shader,
-            &xyz(0.5, 0.0, 0.0),
-            &rotate(40.0 * time, 40.0 * time, 40.0 * time),
-            &rgb(1.0, 0.0, 0.0),
-        );
         window.swap_buffers();
     }
 }
@@ -138,43 +214,4 @@ fn process_input(window: &mut glfw::Window, event: glfw::WindowEvent) {
 
         _ => {}
     }
-}
-
-fn load_texture(path: &str) -> u32 {
-    let img = image::open(&Path::new(path)).expect("Failed to load texture");
-    let img = img.flipv();
-    let data = img.to_rgba8();
-
-    let (width, height) = img.dimensions();
-    let mut texture = 0;
-
-    unsafe {
-        gl::GenTextures(1, &mut texture);
-        gl::BindTexture(gl::TEXTURE_2D, texture);
-
-        gl::TexImage2D(
-            gl::TEXTURE_2D,
-            0,
-            gl::RGBA as i32,
-            width as i32,
-            height as i32,
-            0,
-            gl::RGBA,
-            gl::UNSIGNED_BYTE,
-            data.as_ptr() as *const _,
-        );
-        gl::GenerateMipmap(gl::TEXTURE_2D);
-
-        // Texture parameters (wrap, filter)
-        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::REPEAT as i32);
-        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::REPEAT as i32);
-        gl::TexParameteri(
-            gl::TEXTURE_2D,
-            gl::TEXTURE_MIN_FILTER,
-            gl::LINEAR_MIPMAP_LINEAR as i32,
-        );
-        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as i32);
-    }
-
-    texture
 }
