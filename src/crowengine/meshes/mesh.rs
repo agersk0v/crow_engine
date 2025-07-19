@@ -1,18 +1,18 @@
 extern crate gl;
 
 use super::super::shaders::shader::Shader;
-
-use nalgebra_glm as glm;
+use crate::glm;
 use nalgebra_glm::{identity, translate, Vec3};
+
+use nalgebra_glm::Mat4;
 
 pub struct Mesh {
     vao: u32,
     indices_count: i32,
-    texture: u32,
 }
 
 impl Mesh {
-    pub fn new(vertices: &[f32], indices: &[u32], texture: u32) -> Self {
+    pub fn new((vertices, indices): (Vec<f32>, Vec<u32>)) -> Self {
         let mut vao = 0;
         let mut vbo = 0;
         let mut ebo = 0;
@@ -74,26 +74,18 @@ impl Mesh {
         Mesh {
             vao,
             indices_count: indices.len() as i32,
-            texture,
         }
     }
-}
 
-impl Mesh {
-    pub fn draw(&self, shader: &Shader, position: &Vec3, rotation: &Vec3, color: &Vec3) {
-        shader.use_program();
-        shader.set_color(color);
-        let mut model = identity();
-        model = translate(&model, position);
-        model = glm::rotate(&model, rotation.x, &glm::vec3(1.0, 0.0, 0.0)); // Pitch
-        model = glm::rotate(&model, rotation.y, &glm::vec3(0.0, 1.0, 0.0)); // Yaw
-        model = glm::rotate(&model, rotation.z, &glm::vec3(0.0, 0.0, 1.0)); // Roll
-        shader.set_model(&model);
+    pub fn set_color(&self, shader: &Shader, color: &Vec3) {
+        shader.set_color_uniform(&color);
+    }
 
-        shader.set_texture();
+    pub fn set_texture(&self, shader: &Shader, name: &str, texture: &u32) {
+        shader.set_texture_uniform(name, 0);
         unsafe {
             gl::ActiveTexture(gl::TEXTURE0);
-            gl::BindTexture(gl::TEXTURE_2D, self.texture);
+            gl::BindTexture(gl::TEXTURE_2D, *texture);
             gl::BindVertexArray(self.vao);
             gl::DrawElements(
                 gl::TRIANGLES,
@@ -102,5 +94,23 @@ impl Mesh {
                 std::ptr::null(),
             );
         }
+    }
+
+    pub fn draw(
+        &self,
+        shader: &Shader,
+        color: &Vec3,
+        texture: &u32,
+        model_matrix: &Mat4,
+        projection: &Mat4,
+        view: &Mat4,
+    ) {
+        shader.use_program();
+
+        self.set_color(&shader, &color);
+        shader.set_model_uniform(model_matrix);
+        self.set_texture(&shader, "texture1", &texture);
+        shader.set_projection_uniform(&projection);
+        shader.set_view_uniform(&view);
     }
 }

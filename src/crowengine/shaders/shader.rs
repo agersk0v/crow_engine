@@ -3,17 +3,10 @@ use nalgebra_glm::{Mat4, Vec3};
 
 pub struct Shader {
     shader_program: u32,
-    projection: Mat4,
-    view: Mat4,
 }
 
-impl<'a> Shader {
-    pub fn new(
-        vertex_shader_source: &'a str,
-        fragment_shader_source: &'a str,
-        projection: Mat4,
-        view: Mat4,
-    ) -> Self {
+impl Shader {
+    pub fn new(vertex_shader_source: &str, fragment_shader_source: &str) -> Self {
         let vertex_shader = unsafe { gl::CreateShader(gl::VERTEX_SHADER) };
         unsafe {
             gl::ShaderSource(
@@ -48,16 +41,10 @@ impl<'a> Shader {
             gl::DeleteShader(fragment_shader);
         }
 
-        Shader {
-            shader_program,
-            projection,
-            view,
-        }
+        Shader { shader_program }
     }
-}
 
-impl Shader {
-    pub fn set_color(&self, color: &Vec3) {
+    pub fn set_color_uniform(&self, color: &Vec3) {
         unsafe {
             let location =
                 gl::GetUniformLocation(self.shader_program, b"color\0".as_ptr() as *const _);
@@ -65,21 +52,21 @@ impl Shader {
             if location != -1 {
                 gl::Uniform3f(location, color.x, color.y, color.z);
             } else {
-                eprintln!("⚠️ Uniform 'color' not found!");
+                eprintln!("Uniform 'color' not found!");
             }
         }
     }
 
-    pub fn set_projection(&self) {
+    pub fn set_projection_uniform(&self, projection: &Mat4) {
         unsafe {
             let location =
                 gl::GetUniformLocation(self.shader_program, b"projection\0".as_ptr() as *const _);
 
-            gl::UniformMatrix4fv(location, 1, gl::FALSE, self.projection.as_ptr());
+            gl::UniformMatrix4fv(location, 1, gl::FALSE, projection.as_ptr());
         }
     }
 
-    pub fn set_model(&self, model: &Mat4) {
+    pub fn set_model_uniform(&self, model: &Mat4) {
         unsafe {
             let location =
                 gl::GetUniformLocation(self.shader_program, b"model\0".as_ptr() as *const _);
@@ -87,30 +74,28 @@ impl Shader {
             gl::UniformMatrix4fv(location, 1, gl::FALSE, model.as_ptr());
         }
     }
-    pub fn set_view(&self) {
+    pub fn set_view_uniform(&self, view: &Mat4) {
         unsafe {
             let location =
                 gl::GetUniformLocation(self.shader_program, b"view\0".as_ptr() as *const _);
-            gl::UniformMatrix4fv(location, 1, gl::FALSE, self.view.as_ptr());
+            gl::UniformMatrix4fv(location, 1, gl::FALSE, view.as_ptr());
         }
     }
 
-    pub fn set_texture(&self) {
+    pub fn set_texture_uniform(&self, name: &str, slot: u32) {
         unsafe {
-            let location =
-                gl::GetUniformLocation(self.shader_program, b"texture1\0".as_ptr() as *const _);
-            gl::Uniform1i(location, 0); // Use texture unit 0
-                                        //
+            let cname = std::ffi::CString::new(name).unwrap();
+            let location = gl::GetUniformLocation(self.shader_program, cname.as_ptr());
+            if location != -1 {
+                gl::Uniform1i(location, slot as i32);
+            } else {
+                eprintln!("Uniform '{}' not found!", name);
+            }
         }
     }
-}
-
-impl<'a> Shader {
     pub fn use_program(&self) {
         unsafe {
             gl::UseProgram(self.shader_program);
-            self.set_projection();
-            self.set_view();
         }
     }
 }
